@@ -1,8 +1,12 @@
 <?php
 
 $storageBasePath = __DIR__ . DIRECTORY_SEPARATOR . 'storage';
-$projectSessionPath = $storageBasePath . DIRECTORY_SEPARATOR . 'sessions';
+$projectHash = substr(hash('sha256', __DIR__), 0, 12);
+$projectSessionPath = rtrim(sys_get_temp_dir(), '/\\') . DIRECTORY_SEPARATOR . 'billing_sessions_' . $projectHash;
 
+if (!is_dir($storageBasePath)) {
+    mkdir($storageBasePath, 0700, true);
+}
 if (!is_dir($projectSessionPath)) {
     mkdir($projectSessionPath, 0700, true);
 }
@@ -67,9 +71,15 @@ function get_client_ip(): string
     return $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
 }
 
+function get_rate_limit_file(): string
+{
+    $projectHash = substr(hash('sha256', __DIR__), 0, 12);
+    return rtrim(sys_get_temp_dir(), '/\\') . DIRECTORY_SEPARATOR . 'billing_sessions_' . $projectHash . DIRECTORY_SEPARATOR . 'rate_limit.json';
+}
+
 function check_login_rate_limit(int $maxAttempts = 5, int $lockoutSeconds = 300): ?int
 {
-    $file = __DIR__ . DIRECTORY_SEPARATOR . 'storage' . DIRECTORY_SEPARATOR . 'rate_limit.json';
+    $file = get_rate_limit_file();
     $ip = get_client_ip();
     $now = time();
 
@@ -95,7 +105,7 @@ function check_login_rate_limit(int $maxAttempts = 5, int $lockoutSeconds = 300)
 
 function record_login_failure(int $lockoutSeconds = 300): void
 {
-    $file = __DIR__ . DIRECTORY_SEPARATOR . 'storage' . DIRECTORY_SEPARATOR . 'rate_limit.json';
+    $file = get_rate_limit_file();
     $ip = get_client_ip();
     $now = time();
 
@@ -114,7 +124,7 @@ function record_login_failure(int $lockoutSeconds = 300): void
 
 function clear_login_failures(): void
 {
-    $file = __DIR__ . DIRECTORY_SEPARATOR . 'storage' . DIRECTORY_SEPARATOR . 'rate_limit.json';
+    $file = get_rate_limit_file();
     $ip = get_client_ip();
     if (!is_file($file)) {
         return;
@@ -128,7 +138,10 @@ function clear_login_failures(): void
 
 function write_audit_log(string $action, string $domain, array $extra = []): void
 {
-    $logFile = __DIR__ . DIRECTORY_SEPARATOR . 'storage' . DIRECTORY_SEPARATOR . 'audit.log';
+    $logFile = __DIR__ . DIRECTORY_SEPARATOR . 'storage' . DIRECTORY_SEPARATOR . 'audit.log.php';
+    if (!is_file($logFile)) {
+        @file_put_contents($logFile, "<?php http_response_code(403); exit; ?>\n", LOCK_EX);
+    }
     $entry = [
         'time' => date('Y-m-d H:i:s'),
         'ip' => get_client_ip(),
