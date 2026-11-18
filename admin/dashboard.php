@@ -44,26 +44,30 @@ foreach ($statusData as $domain => $info) {
 
 // Simpan kalau ada perubahan auto-isolir
 if ($changed) {
-    file_put_contents($statusFile, json_encode($statusData, JSON_PRETTY_PRINT));
+    save_status_data($statusFile, $statusData);
 }
 
 // Proses form POST (aksi dari admin)
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $domain = $_POST['domain'] ?? '';
-    $action = $_POST['action'] ?? '';
+    if (verify_csrf()) {
+        $domain = $_POST['domain'] ?? '';
+        $action = $_POST['action'] ?? '';
 
-    if ($domain && isset($statusData[$domain])) {
-        if ($action === 'aktif') {
-            $statusData[$domain]['status'] = 'aktif';
-            $statusData[$domain]['activated_at'] = date('Y-m-d');
-            $statusData[$domain]['due_date'] = calculate_due_date_from_activation($statusData[$domain]['activated_at']);
-        } elseif ($action === 'isolir') {
-            $statusData[$domain]['status'] = 'isolir';
-            // keep due_date as-is (optional: set activated_at null)
-        } elseif ($action === 'extend') {
-            $statusData[$domain]['due_date'] = calculate_extended_due_date($statusData[$domain]['due_date'] ?? null, $today);
+        if ($domain && isset($statusData[$domain])) {
+            if ($action === 'aktif') {
+                $statusData[$domain]['status'] = 'aktif';
+                $statusData[$domain]['activated_at'] = date('Y-m-d');
+                $statusData[$domain]['due_date'] = calculate_due_date_from_activation($statusData[$domain]['activated_at']);
+            } elseif ($action === 'isolir') {
+                $statusData[$domain]['status'] = 'isolir';
+            } elseif ($action === 'extend') {
+                $statusData[$domain]['due_date'] = calculate_extended_due_date($statusData[$domain]['due_date'] ?? null, $today);
+            }
+            save_status_data($statusFile, $statusData);
+            write_audit_log('dashboard_' . $action, $domain);
         }
-        file_put_contents($statusFile, json_encode($statusData, JSON_PRETTY_PRINT));
+    } else {
+        write_audit_log('csrf_failed_dashboard', $_POST['domain'] ?? '-');
     }
     header('Location: dashboard.php');
     exit;
@@ -270,6 +274,7 @@ $adminUser = $_SESSION['admin_user'] ?? ADMIN_USER;
                                 <td>
                                     <div class="d-flex flex-wrap justify-content-center gap-2">
                                         <form method="post" class="m-0">
+                                            <?= csrf_field() ?>
                                             <input type="hidden" name="domain" value="<?= htmlspecialchars($domain) ?>">
                                             <input type="hidden" name="action" value="<?= $status === 'aktif' ? 'isolir' : 'aktif' ?>">
                                             <button class="btn btn-sm <?= $status === 'aktif' ? 'btn-soft-warning' : 'btn-success' ?>">
@@ -278,6 +283,7 @@ $adminUser = $_SESSION['admin_user'] ?? ADMIN_USER;
                                             </button>
                                         </form>
                                         <form method="post" class="m-0">
+                                            <?= csrf_field() ?>
                                             <input type="hidden" name="domain" value="<?= htmlspecialchars($domain) ?>">
                                             <input type="hidden" name="action" value="extend">
                                             <button class="btn btn-sm btn-soft-primary" name="extend" value="1">

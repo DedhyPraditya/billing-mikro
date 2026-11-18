@@ -11,16 +11,39 @@ if (isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true) {
 // Cek login
 $error = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $username = $_POST['username'] ?? '';
-    $password = $_POST['password'] ?? '';
+    $waitSeconds = check_login_rate_limit(5, 300);
 
-    if ($username === ADMIN_USER && $password === ADMIN_PASS) {
-        $_SESSION['logged_in'] = true;
-        $_SESSION['admin_user'] = $username;
-        header('Location: dashboard.php');
-        exit;
+    if ($waitSeconds !== null) {
+        $error = 'Terlalu banyak percobaan gagal. Coba lagi dalam ' . $waitSeconds . ' detik.';
+        write_audit_log('login_rate_limited', '-');
+    } elseif (!verify_csrf()) {
+        $error = 'Sesi form tidak valid. Silakan muat ulang halaman.';
     } else {
-        $error = 'Username atau password salah.';
+        $username = (string) ($_POST['username'] ?? '');
+        $password = (string) ($_POST['password'] ?? '');
+
+        $userMatch = hash_equals((string) ADMIN_USER, $username);
+        $configuredPass = (string) ADMIN_PASS;
+        if (str_starts_with($configuredPass, '$2y$') || str_starts_with($configuredPass, '$argon2')) {
+            $passMatch = password_verify($password, $configuredPass);
+        } else {
+            $passMatch = hash_equals($configuredPass, $password);
+        }
+
+        if ($userMatch && $passMatch) {
+            clear_login_failures();
+            session_regenerate_id(true);
+            $_SESSION['logged_in'] = true;
+            $_SESSION['admin_user'] = $username;
+            $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+            write_audit_log('login_success', '-');
+            header('Location: dashboard.php');
+            exit;
+        } else {
+            record_login_failure(300);
+            write_audit_log('login_failed', '-', ['attempted_user' => substr($username, 0, 64)]);
+            $error = 'Username atau password salah.';
+        }
     }
 }
 ?>
@@ -63,6 +86,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <?php endif; ?>
 
                     <form method="post" class="mt-2">
+                        <?= csrf_field() ?>
                         <div class="mb-3">
                             <label class="form-label">Username</label>
                             <div class="position-relative">

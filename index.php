@@ -14,20 +14,25 @@ $data = json_decode(file_get_contents($statusFile), true);
 $data = is_array($data) ? $data : [];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $domain = $_POST['domain'] ?? '';
-    $action = $_POST['action'] ?? '';
+    if (verify_csrf()) {
+        $domain = $_POST['domain'] ?? '';
+        $action = $_POST['action'] ?? '';
 
-    if (isset($data[$domain])) {
-        if ($action === 'aktif') {
-            $data[$domain]['status'] = 'aktif';
-            $data[$domain]['activated_at'] = date('Y-m-d');
-            $data[$domain]['due_date'] = calculate_due_date_from_activation($data[$domain]['activated_at']);
-        } elseif ($action === 'extend') {
-            $data[$domain]['due_date'] = calculate_extended_due_date($data[$domain]['due_date'] ?? null);
-        } else {
-            $data[$domain]['status'] = 'isolir';
+        if (isset($data[$domain])) {
+            if ($action === 'aktif') {
+                $data[$domain]['status'] = 'aktif';
+                $data[$domain]['activated_at'] = date('Y-m-d');
+                $data[$domain]['due_date'] = calculate_due_date_from_activation($data[$domain]['activated_at']);
+            } elseif ($action === 'extend') {
+                $data[$domain]['due_date'] = calculate_extended_due_date($data[$domain]['due_date'] ?? null);
+            } else {
+                $data[$domain]['status'] = 'isolir';
+            }
+            save_status_data($statusFile, $data);
+            write_audit_log('index_' . $action, $domain);
         }
-        file_put_contents($statusFile, json_encode($data, JSON_PRETTY_PRINT));
+    } else {
+        write_audit_log('csrf_failed_index', $_POST['domain'] ?? '-');
     }
 
     header("Location: index.php");
@@ -220,6 +225,7 @@ $adminUser = $_SESSION['admin_user'] ?? ADMIN_USER;
                                         <td>
                                             <div class="d-flex flex-wrap justify-content-center gap-2">
                                                 <form method="POST" class="m-0">
+                                                    <?= csrf_field() ?>
                                                     <input type="hidden" name="domain" value="<?= htmlspecialchars($domain) ?>">
                                                     <input type="hidden" name="action" value="<?= $status === 'aktif' ? 'isolir' : 'aktif' ?>">
                                                     <button type="submit" class="btn btn-sm <?= $status === 'aktif' ? 'btn-soft-warning' : 'btn-success' ?>">
@@ -228,6 +234,7 @@ $adminUser = $_SESSION['admin_user'] ?? ADMIN_USER;
                                                     </button>
                                                 </form>
                                                 <form method="POST" class="m-0">
+                                                    <?= csrf_field() ?>
                                                     <input type="hidden" name="domain" value="<?= htmlspecialchars($domain) ?>">
                                                     <input type="hidden" name="action" value="extend">
                                                     <button type="submit" class="btn btn-sm btn-soft-primary">

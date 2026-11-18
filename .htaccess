@@ -1,0 +1,16 @@
+Options -Indexes
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule ^(\.git|storage)(/|$) - [F,L]
+</IfModule>
+
+<FilesMatch "^(status\.json|status\.example\.json|config\.php|config\.example\.php|bootstrap\.php|billing_helpers\.php|.*\.log|\.gitignore)$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>

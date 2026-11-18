@@ -9,82 +9,105 @@ if (!isset($_SESSION['logged_in']) || $_SESSION['logged_in'] !== true) {
 }
 
 $statusFile = STATUS_FILE;
-$data = json_decode(file_get_contents($statusFile), true);
+$data = is_file($statusFile) ? json_decode((string) file_get_contents($statusFile), true) : [];
 $data = is_array($data) ? $data : [];
 
 $message = '';
 $messageType = '';
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add') {
-    $domain = trim($_POST['domain'] ?? '');
-    $status = $_POST['status'] ?? 'isolir';
-    $activated_at = $_POST['activated_at'] ?? '';
-    $due_date = calculate_due_date_from_activation($activated_at);
-
-    if ($domain === '') {
-        $message = 'Domain tidak boleh kosong!';
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (!verify_csrf()) {
+        $message = 'Token keamanan (CSRF) tidak valid. Silakan muat ulang halaman.';
         $messageType = 'danger';
-    } elseif (!$due_date) {
-        $message = 'Tanggal aktivasi tidak valid!';
-        $messageType = 'danger';
-    } elseif (isset($data[$domain])) {
-        $message = 'Domain sudah terdaftar!';
-        $messageType = 'danger';
+        write_audit_log('csrf_failed', $_POST['domain'] ?? '-');
     } else {
-        $data[$domain] = [
-            'status' => $status,
-            'activated_at' => $activated_at,
-            'due_date' => $due_date,
-        ];
-        file_put_contents($statusFile, json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
-        $message = 'Data berhasil ditambahkan!';
-        $messageType = 'success';
-    }
-}
+        $action = $_POST['action'] ?? '';
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'edit') {
-    $old_domain = $_POST['old_domain'] ?? '';
-    $domain = trim($_POST['domain'] ?? '');
-    $status = $_POST['status'] ?? 'isolir';
-    $activated_at = $_POST['activated_at'] ?? '';
-    $due_date = calculate_due_date_from_activation($activated_at);
+        if ($action === 'add') {
+            $rawDomain = $_POST['domain'] ?? '';
+            $domain = normalize_and_validate_domain($rawDomain);
+            $status = $_POST['status'] ?? 'isolir';
+            $activated_at = $_POST['activated_at'] ?? '';
+            $due_date = calculate_due_date_from_activation($activated_at);
 
-    if ($domain === '') {
-        $message = 'Domain tidak boleh kosong!';
-        $messageType = 'danger';
-    } elseif (!$due_date) {
-        $message = 'Tanggal aktivasi tidak valid!';
-        $messageType = 'danger';
-    } elseif ($domain !== $old_domain && isset($data[$domain])) {
-        $message = 'Domain sudah terdaftar!';
-        $messageType = 'danger';
-    } else {
-        if ($domain !== $old_domain && isset($data[$old_domain])) {
-            unset($data[$old_domain]);
+            if ($domain === null) {
+                $message = defined('ALLOWED_DOMAIN_SUFFIX') && ALLOWED_DOMAIN_SUFFIX !== ''
+                    ? 'Format domain tidak valid! Wajib berakhiran ' . ALLOWED_DOMAIN_SUFFIX
+                    : 'Format domain tidak valid!';
+                $messageType = 'danger';
+                write_audit_log('invalid_domain_rejected', (string) $rawDomain);
+            } elseif (!in_array($status, ['aktif', 'isolir'], true)) {
+                $message = 'Status tidak valid!';
+                $messageType = 'danger';
+            } elseif (!$due_date) {
+                $message = 'Tanggal aktivasi tidak valid!';
+                $messageType = 'danger';
+            } elseif (isset($data[$domain])) {
+                $message = 'Domain sudah terdaftar!';
+                $messageType = 'danger';
+            } else {
+                $data[$domain] = [
+                    'status' => $status,
+                    'activated_at' => $activated_at,
+                    'due_date' => $due_date,
+                ];
+                save_status_data($statusFile, $data);
+                write_audit_log('domain_add', $domain, ['status' => $status, 'due_date' => $due_date]);
+                $message = 'Data berhasil ditambahkan!';
+                $messageType = 'success';
+            }
+        } elseif ($action === 'edit') {
+            $old_domain = strtolower(trim((string) ($_POST['old_domain'] ?? '')));
+            $rawDomain = $_POST['domain'] ?? '';
+            $domain = normalize_and_validate_domain($rawDomain);
+            $status = $_POST['status'] ?? 'isolir';
+            $activated_at = $_POST['activated_at'] ?? '';
+            $due_date = calculate_due_date_from_activation($activated_at);
+
+            if ($domain === null) {
+                $message = defined('ALLOWED_DOMAIN_SUFFIX') && ALLOWED_DOMAIN_SUFFIX !== ''
+                    ? 'Format domain tidak valid! Wajib berakhiran ' . ALLOWED_DOMAIN_SUFFIX
+                    : 'Format domain tidak valid!';
+                $messageType = 'danger';
+                write_audit_log('invalid_domain_rejected', (string) $rawDomain);
+            } elseif (!in_array($status, ['aktif', 'isolir'], true)) {
+                $message = 'Status tidak valid!';
+                $messageType = 'danger';
+            } elseif (!$due_date) {
+                $message = 'Tanggal aktivasi tidak valid!';
+                $messageType = 'danger';
+            } elseif ($domain !== $old_domain && isset($data[$domain])) {
+                $message = 'Domain sudah terdaftar!';
+                $messageType = 'danger';
+            } else {
+                if ($domain !== $old_domain && isset($data[$old_domain])) {
+                    unset($data[$old_domain]);
+                }
+
+                $data[$domain] = [
+                    'status' => $status,
+                    'activated_at' => $activated_at,
+                    'due_date' => $due_date,
+                ];
+                save_status_data($statusFile, $data);
+                write_audit_log('domain_edit', $domain, ['old_domain' => $old_domain, 'status' => $status, 'due_date' => $due_date]);
+                $message = 'Data berhasil diupdate!';
+                $messageType = 'success';
+            }
+        } elseif ($action === 'delete') {
+            $domain = strtolower(trim((string) ($_POST['domain'] ?? '')));
+            if (isset($data[$domain])) {
+                unset($data[$domain]);
+                save_status_data($statusFile, $data);
+                write_audit_log('domain_delete', $domain);
+                $message = 'Data berhasil dihapus!';
+                $messageType = 'success';
+            }
         }
-
-        $data[$domain] = [
-            'status' => $status,
-            'activated_at' => $activated_at,
-            'due_date' => $due_date,
-        ];
-        file_put_contents($statusFile, json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
-        $message = 'Data berhasil diupdate!';
-        $messageType = 'success';
     }
 }
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'delete') {
-    $domain = $_POST['domain'] ?? '';
-    if (isset($data[$domain])) {
-        unset($data[$domain]);
-        file_put_contents($statusFile, json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
-        $message = 'Data berhasil dihapus!';
-        $messageType = 'success';
-    }
-}
-
-$data = json_decode(file_get_contents($statusFile), true);
+$data = is_file($statusFile) ? json_decode((string) file_get_contents($statusFile), true) : [];
 $data = is_array($data) ? $data : [];
 
 $stats = [
@@ -190,12 +213,13 @@ $adminUser = $_SESSION['admin_user'] ?? ADMIN_USER;
                         </div>
 
                         <form method="POST">
+                            <?= csrf_field() ?>
                             <input type="hidden" name="action" value="add" id="action-field">
                             <input type="hidden" name="old_domain" id="old-domain">
 
                             <div class="mb-3">
                                 <label class="form-label">Domain</label>
-                                <input type="text" class="form-control" name="domain" id="domain" placeholder="contoh.domain.com" required>
+                                <input type="text" class="form-control" name="domain" id="domain" placeholder="contoh.madignet.cloud" required>
                             </div>
 
                             <div class="mb-3">
@@ -234,7 +258,7 @@ $adminUser = $_SESSION['admin_user'] ?? ADMIN_USER;
                                 </span>
                                 <div>
                                     <h3 class="h6 mb-1">Tips pengisian</h3>
-                            <p class="text-soft mb-0">Tanggal jatuh tempo sekarang otomatis mengikuti 1 bulan kalender dari tanggal aktivasi yang dipilih.</p>
+                                    <p class="text-soft mb-0">Tanggal jatuh tempo sekarang otomatis mengikuti 1 bulan kalender dari tanggal aktivasi yang dipilih.</p>
                                 </div>
                             </div>
                         </div>
@@ -280,16 +304,21 @@ $adminUser = $_SESSION['admin_user'] ?? ADMIN_USER;
                                                     <span class="status-pill status-isolir"><i class="bi bi-slash-circle-fill"></i> Isolir</span>
                                                 <?php endif; ?>
                                             </td>
-                                            <td><?= htmlspecialchars($info['activated_at']) ?></td>
-                                            <td><?= htmlspecialchars($info['due_date']) ?></td>
+                                            <td><?= htmlspecialchars($info['activated_at'] ?? '-') ?></td>
+                                            <td><?= htmlspecialchars($info['due_date'] ?? '-') ?></td>
                                             <td>
                                                 <div class="d-flex flex-wrap gap-2">
                                                     <button type="button" class="btn btn-sm btn-soft-warning" data-bs-toggle="modal"
                                                             data-bs-target="#editModal"
-                                                            onclick="loadEditForm('<?= htmlspecialchars($domain) ?>', '<?= htmlspecialchars($info['status']) ?>', '<?= htmlspecialchars($info['activated_at']) ?>', '<?= htmlspecialchars($info['due_date']) ?>')">
+                                                            data-domain="<?= htmlspecialchars($domain, ENT_QUOTES, 'UTF-8') ?>"
+                                                            data-status="<?= htmlspecialchars($info['status'] ?? 'isolir', ENT_QUOTES, 'UTF-8') ?>"
+                                                            data-activated="<?= htmlspecialchars($info['activated_at'] ?? '', ENT_QUOTES, 'UTF-8') ?>"
+                                                            data-due="<?= htmlspecialchars($info['due_date'] ?? '', ENT_QUOTES, 'UTF-8') ?>"
+                                                            onclick="loadEditFormFromBtn(this)">
                                                         <i class="bi bi-pencil me-1"></i>Edit
                                                     </button>
                                                     <form method="POST" class="m-0" onsubmit="return confirm('Yakin ingin menghapus data ini?');">
+                                                        <?= csrf_field() ?>
                                                         <input type="hidden" name="action" value="delete">
                                                         <input type="hidden" name="domain" value="<?= htmlspecialchars($domain) ?>">
                                                         <button type="submit" class="btn btn-sm btn-soft-danger">
@@ -329,6 +358,7 @@ $adminUser = $_SESSION['admin_user'] ?? ADMIN_USER;
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <form method="POST">
+                    <?= csrf_field() ?>
                     <div class="modal-body">
                         <input type="hidden" name="action" value="edit">
                         <input type="hidden" name="old_domain" id="edit-old-domain">
@@ -406,7 +436,12 @@ $adminUser = $_SESSION['admin_user'] ?? ADMIN_USER;
             applyValue();
         }
 
-        function loadEditForm(domain, status, activated_at, due_date) {
+        function loadEditFormFromBtn(btn) {
+            const domain = btn.dataset.domain || '';
+            const status = btn.dataset.status || 'isolir';
+            const activated_at = btn.dataset.activated || '';
+            const due_date = btn.dataset.due || '';
+
             document.getElementById('edit-old-domain').value = domain;
             document.getElementById('edit-domain').value = domain;
             document.getElementById('edit-status').value = status;

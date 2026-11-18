@@ -1,22 +1,23 @@
 <?php
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/billing_helpers.php';
-header('Content-Type: application/json');
-header("Cache-Control: no-cache, no-store, must-revalidate");
-header("Pragma: no-cache");
-header("Expires: 0");
+header('Content-Type: application/json; charset=utf-8');
+header('X-Content-Type-Options: nosniff');
+header('Cache-Control: no-cache, no-store, must-revalidate');
+header('Pragma: no-cache');
+header('Expires: 0');
 
-
-$domain = $_GET['domain'] ?? '';
-if (!$domain) {
+$domain = strtolower(trim((string) ($_GET['domain'] ?? '')));
+if ($domain === '') {
     echo json_encode(['error' => 'domain parameter missing']);
     exit;
 }
 
-$statusData = json_decode(file_get_contents(STATUS_FILE), true);
+$statusData = is_file(STATUS_FILE) ? json_decode((string) file_get_contents(STATUS_FILE), true) : [];
+$statusData = is_array($statusData) ? $statusData : [];
 $data = $statusData[$domain] ?? null;
 
-if (!$data) {
+if (!is_array($data)) {
     echo json_encode(['status' => 'isolir', 'reason' => 'domain not found']);
     exit;
 }
@@ -30,6 +31,6 @@ if ($dueDate && $today > $dueDate) {
 
 echo json_encode([
     'domain' => $domain,
-    'status' => $data['status'],
-    'due_date' => $data['due_date'],
+    'status' => $data['status'] ?? 'isolir',
+    'due_date' => $data['due_date'] ?? null,
 ]);

@@ -31,3 +31,6 @@ jobs:
             git fetch origin main
             git reset --hard origin/main
             chown -R www:www .
+            [ -f config.php ] && chmod 600 config.php || true
+            [ -f status.json ] && chmod 600 status.json || true
+            [ -d storage ] && chmod -R 700 storage || true
