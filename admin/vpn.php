@@ -476,6 +476,19 @@ $publicHost = $chrConfig['public_host'] ?: $chrConfig['host'];
                             <i class="bi bi-lightning-charge-fill me-1"></i>Buat PPP Secret &amp; Rule NAT
                         </button>
                     </form>
+
+                    <!-- Live Preview Script MikroTik Client -->
+                    <div class="mt-3 pt-3 border-top">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="fw-bold" style="font-size:0.78rem;color:#0f172a;">
+                                <i class="bi bi-terminal me-1"></i>Preview Script MikroTik Client
+                            </span>
+                            <button type="button" class="btn btn-xs btn-ops-light" onclick="copyLiveScript(this)">
+                                <i class="bi bi-clipboard"></i> Salin
+                            </button>
+                        </div>
+                        <textarea id="live-script-preview" class="form-control font-mono bg-dark text-light" rows="6" readonly style="font-size:0.75rem;line-height:1.4;"></textarea>
+                    </div>
                 </div>
             </div>
 
@@ -726,6 +739,33 @@ function genPass() {
         out += chars.charAt(Math.floor(Math.random() * chars.length));
     }
     document.getElementById('vpn_pass').value = out;
+    updateLiveScriptPreview();
+}
+
+const chrPublicHost = <?= json_encode($publicHost ?: 'IP_CHR_ANDA') ?>;
+
+function updateLiveScriptPreview() {
+    const box = document.getElementById('live-script-preview');
+    if (!box) return;
+    const userInput = document.querySelector('input[name="vpn_user"]');
+    const passInput = document.querySelector('input[name="vpn_pass"]');
+    const svcSelect = document.querySelector('select[name="vpn_service"]');
+
+    box.value = buildClientScript({
+        host: chrPublicHost,
+        user: (userInput && userInput.value.trim()) ? userInput.value.trim() : 'USER_VPN',
+        pass: (passInput && passInput.value.trim()) ? passInput.value.trim() : 'PASS_VPN',
+        service: svcSelect ? svcSelect.value : 'l2tp'
+    });
+}
+
+function copyLiveScript(btn) {
+    const box = document.getElementById('live-script-preview');
+    if (!box) return;
+    navigator.clipboard.writeText(box.value);
+    const oldHtml = btn.innerHTML;
+    btn.innerHTML = '<i class="bi bi-check2"></i> Tersalin';
+    setTimeout(() => { btn.innerHTML = oldHtml; }, 1500);
 }
 
 function buildClientScript(data) {
@@ -779,6 +819,15 @@ function copyRouterScript() {
 
 document.addEventListener('DOMContentLoaded', function () {
     genPass();
+
+    ['input[name="vpn_user"]', 'input[name="vpn_pass"]', 'select[name="vpn_service"]'].forEach(sel => {
+        const el = document.querySelector(sel);
+        if (el) {
+            el.addEventListener('input', updateLiveScriptPreview);
+            el.addEventListener('change', updateLiveScriptPreview);
+        }
+    });
+    updateLiveScriptPreview();
 
     const searchInput = document.getElementById('vpnSearch');
     const rows = document.querySelectorAll('#vpnTable tbody tr[data-search]');
