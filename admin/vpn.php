@@ -26,6 +26,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
 
     if ($action === 'save_chr_config') {
+        $basePort = max(100, min(65000, (int) ($_POST['base_nat_port'] ?? ($chrConfig['base_nat_port'] ?? 1000))));
         $newCfg = [
             'host' => trim((string) ($_POST['chr_host'] ?? '')),
             'port' => max(1, (int) ($_POST['chr_port'] ?? 8728)),
@@ -35,6 +36,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'default_local_ip' => trim((string) ($_POST['default_local_ip'] ?? '10.10.10.1')),
             'default_profile' => trim((string) ($_POST['default_profile'] ?? 'default-encryption')),
             'ipsec_secret' => trim((string) ($_POST['ipsec_secret'] ?? 'ndrsolution.my.id')),
+            'base_nat_port' => $basePort,
+            'last_used_port' => max((int) ($chrConfig['last_used_port'] ?? 0), $basePort),
+            'used_ports_history' => $chrConfig['used_ports_history'] ?? [],
         ];
         save_chr_config($newCfg);
         write_audit_log('chr_config_updated', $newCfg['host']);
@@ -100,16 +104,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         $createdNats = [];
+        $assignedPorts = [];
         $natRulesToCreate = [
             ['label' => 'API', 'dst_port' => $portApi, 'to_port' => $toPortApi],
             ['label' => 'WINBOX', 'dst_port' => $portWinbox, 'to_port' => $toPortWinbox],
             ['label' => 'WEB', 'dst_port' => $portWeb, 'to_port' => $toPortWeb],
         ];
 
+        // Ambil port yang sudah terpakai di CHR maupun di riwayat agar tidak pernah bentrok/dipakai ulang
+        $usedHistory = array_map('intval', $chrConfig['used_ports_history'] ?? []);
+        $existingNats = $api->comm('/ip/firewall/nat/print', ['?chain' => 'dstnat']);
+        foreach ($existingNats as $k => $en) {
+            if ($k !== '!trap' && is_array($en) && isset($en['dst-port'])) {
+                $p = (int) $en['dst-port'];
+                if ($p > 0) {
+                    $usedHistory[] = $p;
+                }
+            }
+        }
+        $usedSet = array_flip($usedHistory);
+
         foreach ($natRulesToCreate as $rule) {
             $dstPort = (int) $rule['dst_port'];
             $toPort = (int) $rule['to_port'];
             if ($dstPort > 0 && $dstPort <= 65535 && $toPort > 0 && $toPort <= 65535) {
+                // Jika port yang diinput ternyata sudah pernah dipakai, geser otomatis ke port berurut berikutnya yang belum pernah dipakai
+                while (isset($usedSet[$dstPort]) && $dstPort < 65535) {
+                    $dstPort++;
+                }
+                $usedSet[$dstPort] = true;
+                $assignedPorts[] = $dstPort;
+
+                if ($rule['label'] === 'API') $portApi = (string) $dstPort;
+                elseif ($rule['label'] === 'WINBOX') $portWinbox = (string) $dstPort;
+                elseif ($rule['label'] === 'WEB') $portWeb = (string) $dstPort;
+
                 $natComment = "VPN-{$name} [{$rule['label']}]" . ($comment !== '' ? " {$comment}" : '');
                 $natRes = $api->comm('/ip/firewall/nat/add', [
                     'chain' => 'dstnat',
@@ -124,6 +153,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $createdNats[] = "{$rule['label']}:{$dstPort}->{$toPort}";
                 }
             }
+        }
+
+        // Simpan permanen riwayat port & last_used_port agar tidak pernah dipakai lagi walaupun client dihapus
+        if (!empty($assignedPorts)) {
+            $chrConfig['used_ports_history'] = array_values(array_unique(array_merge($usedHistory, $assignedPorts)));
+            $chrConfig['last_used_port'] = max((int) ($chrConfig['last_used_port'] ?? 0), max($assignedPorts));
+            save_chr_config($chrConfig);
         }
 
         write_audit_log('vpn_add', $name, ['remote_ip' => $remoteAddr, 'nats' => $createdNats]);
@@ -221,6 +257,7 @@ $secrets = [];
 $activeMap = [];
 $natByIp = [];
 $profiles = ['default', 'default-encryption'];
+$allKnownPorts = array_map('intval', $chrConfig['used_ports_history'] ?? []);
 
 if ($chrConfig['host'] !== '') {
     $api = new RouterosApi();
@@ -246,8 +283,14 @@ if ($chrConfig['host'] !== '') {
         }
 
         $rawNats = $api->comm('/ip/firewall/nat/print', ['?chain' => 'dstnat']);
+        $historyChanged = false;
         foreach ($rawNats as $k => $n) {
             if ($k !== '!trap' && is_array($n)) {
+                $dstP = (int) ($n['dst-port'] ?? 0);
+                if ($dstP > 0 && !in_array($dstP, $allKnownPorts, true)) {
+                    $allKnownPorts[] = $dstP;
+                    $historyChanged = true;
+                }
                 $toIp = $n['to-addresses'] ?? '';
                 if ($toIp !== '' && ($n['action'] ?? '') === 'dst-nat') {
                     $natByIp[$toIp][] = [
@@ -262,6 +305,12 @@ if ($chrConfig['host'] !== '') {
             }
         }
 
+        if ($historyChanged) {
+            $chrConfig['used_ports_history'] = array_values(array_unique($allKnownPorts));
+            $chrConfig['last_used_port'] = max((int) ($chrConfig['last_used_port'] ?? 0), max($allKnownPorts));
+            save_chr_config($chrConfig);
+        }
+
         $rawSecrets = $api->comm('/ppp/secret/print');
         foreach ($rawSecrets as $k => $s) {
             if ($k !== '!trap' && is_array($s) && isset($s['name'])) {
@@ -272,6 +321,26 @@ if ($chrConfig['host'] !== '') {
         $chrError = $api->getLastError();
     }
 }
+
+// Hitung 3 port berurutan berikutnya yang belum pernah terpakai sama sekali
+$baseNatPort = max(100, (int) ($chrConfig['base_nat_port'] ?? 1000));
+$highWaterPort = max($baseNatPort, (int) ($chrConfig['last_used_port'] ?? 0));
+if (!empty($allKnownPorts)) {
+    $highWaterPort = max($highWaterPort, max($allKnownPorts));
+}
+$knownPortMap = array_flip($allKnownPorts);
+$nextSequentialPorts = [];
+$candidatePort = $highWaterPort + 1;
+while (count($nextSequentialPorts) < 3 && $candidatePort <= 65535) {
+    if (!isset($knownPortMap[$candidatePort])) {
+        $nextSequentialPorts[] = $candidatePort;
+        $knownPortMap[$candidatePort] = true;
+    }
+    $candidatePort++;
+}
+$nextPortApi = $nextSequentialPorts[0] ?? ($baseNatPort + 1);
+$nextPortWinbox = $nextSequentialPorts[1] ?? ($baseNatPort + 2);
+$nextPortWeb = $nextSequentialPorts[2] ?? ($baseNatPort + 3);
 
 $adminUser = $_SESSION['admin_user'] ?? ADMIN_USER;
 $publicHost = $chrConfig['public_host'] ?: $chrConfig['host'];
@@ -441,7 +510,7 @@ $publicHost = $chrConfig['public_host'] ?: $chrConfig['host'];
                                     <span class="font-mono" style="font-size:0.76rem;">API Mikhmon</span>
                                 </div>
                                 <div class="col-4">
-                                    <input type="number" class="form-control form-control-sm font-mono" name="nat_port_api" placeholder="Port CHR">
+                                    <input type="number" class="form-control form-control-sm font-mono" name="nat_port_api" value="<?= (int) $nextPortApi ?>" placeholder="Port CHR">
                                 </div>
                                 <div class="col-4">
                                     <input type="number" class="form-control form-control-sm font-mono" name="to_port_api" value="8728" placeholder="8728">
@@ -453,7 +522,7 @@ $publicHost = $chrConfig['public_host'] ?: $chrConfig['host'];
                                     <span class="font-mono" style="font-size:0.76rem;">Winbox</span>
                                 </div>
                                 <div class="col-4">
-                                    <input type="number" class="form-control form-control-sm font-mono" name="nat_port_winbox" placeholder="Port CHR">
+                                    <input type="number" class="form-control form-control-sm font-mono" name="nat_port_winbox" value="<?= (int) $nextPortWinbox ?>" placeholder="Port CHR">
                                 </div>
                                 <div class="col-4">
                                     <input type="number" class="form-control form-control-sm font-mono" name="to_port_winbox" value="8291" placeholder="8291">
@@ -465,7 +534,7 @@ $publicHost = $chrConfig['public_host'] ?: $chrConfig['host'];
                                     <span class="font-mono" style="font-size:0.76rem;">WebFig (Ops)</span>
                                 </div>
                                 <div class="col-4">
-                                    <input type="number" class="form-control form-control-sm font-mono" name="nat_port_web" placeholder="Kosong=Skip">
+                                    <input type="number" class="form-control form-control-sm font-mono" name="nat_port_web" value="<?= (int) $nextPortWeb ?>" placeholder="Kosong=Skip">
                                 </div>
                                 <div class="col-4">
                                     <input type="number" class="form-control form-control-sm font-mono" name="to_port_web" value="80" placeholder="80">
@@ -676,13 +745,17 @@ $publicHost = $chrConfig['public_host'] ?: $chrConfig['host'];
                         </div>
                     </div>
                     <div class="row g-2">
-                        <div class="col-6">
-                            <label class="form-label">Default Gateway Local IP</label>
+                        <div class="col-4">
+                            <label class="form-label">Gateway Local IP</label>
                             <input type="text" class="form-control font-mono" name="default_local_ip" value="<?= htmlspecialchars($chrConfig['default_local_ip']) ?>">
                         </div>
-                        <div class="col-6">
-                            <label class="form-label">Default PPP Profile</label>
+                        <div class="col-4">
+                            <label class="form-label">PPP Profile</label>
                             <input type="text" class="form-control font-mono" name="default_profile" value="<?= htmlspecialchars($chrConfig['default_profile']) ?>">
+                        </div>
+                        <div class="col-4">
+                            <label class="form-label">Port NAT Awal</label>
+                            <input type="number" class="form-control font-mono" name="base_nat_port" value="<?= (int) ($chrConfig['base_nat_port'] ?? 1000) ?>">
                         </div>
                     </div>
                 </div>

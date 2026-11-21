@@ -284,6 +284,9 @@ function get_chr_config(): array
         'default_local_ip' => $saved['default_local_ip'] ?? '10.10.10.1',
         'default_profile' => $saved['default_profile'] ?? 'default-encryption',
         'ipsec_secret' => $saved['ipsec_secret'] ?? 'ndrsolution.my.id',
+        'base_nat_port' => (int) ($saved['base_nat_port'] ?? 1000),
+        'last_used_port' => (int) ($saved['last_used_port'] ?? 0),
+        'used_ports_history' => is_array($saved['used_ports_history'] ?? null) ? $saved['used_ports_history'] : [],
     ];
 }
 
