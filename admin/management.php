@@ -140,6 +140,9 @@ $adminUser = $_SESSION['admin_user'] ?? ADMIN_USER;
                     <li class="nav-item">
                         <a class="nav-link active" href="management.php"><i class="bi bi-sliders me-1"></i>Manajemen</a>
                     </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="vpn.php"><i class="bi bi-shield-lock me-1"></i>VPN CHR</a>
+                    </li>
                     <li class="nav-item ms-lg-2 my-2 my-lg-0">
                         <span class="user-chip">
                             <i class="bi bi-person-fill"></i>

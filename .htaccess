@@ -5,7 +5,7 @@ Options -Indexes
     RewriteRule ^(\.git|storage)(/|$) - [F,L]
 </IfModule>
 
-<FilesMatch "^(status\.json|status\.example\.json|config\.php|config\.example\.php|bootstrap\.php|billing_helpers\.php|.*\.log|\.gitignore)$">
+<FilesMatch "^(status\.json|status\.example\.json|config\.php|config\.example\.php|bootstrap\.php|billing_helpers\.php|routeros_api\.php|.*\.log|\.gitignore)$">
     <IfModule mod_authz_core.c>
         Require all denied
     </IfModule>
