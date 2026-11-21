@@ -34,6 +34,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'public_host' => trim((string) ($_POST['chr_public_host'] ?? '')) ?: trim((string) ($_POST['chr_host'] ?? '')),
             'default_local_ip' => trim((string) ($_POST['default_local_ip'] ?? '10.10.10.1')),
             'default_profile' => trim((string) ($_POST['default_profile'] ?? 'default-encryption')),
+            'ipsec_secret' => trim((string) ($_POST['ipsec_secret'] ?? 'ndrsolution.my.id')),
         ];
         save_chr_config($newCfg);
         write_audit_log('chr_config_updated', $newCfg['host']);
@@ -664,9 +665,15 @@ $publicHost = $chrConfig['public_host'] ?: $chrConfig['host'];
                             <input type="password" class="form-control font-mono" name="chr_pass" placeholder="<?= $chrConfig['pass'] !== '' ? '(Tetap / tidak diubah)' : 'Masukkan password' ?>">
                         </div>
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label">Domain/IP Publik CHR (Untuk Script Pelanggan)</label>
-                        <input type="text" class="form-control font-mono" name="chr_public_host" value="<?= htmlspecialchars($chrConfig['public_host']) ?>" placeholder="vpn.madignet.site / IP CHR">
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label">Domain/IP Publik CHR</label>
+                            <input type="text" class="form-control font-mono" name="chr_public_host" value="<?= htmlspecialchars($chrConfig['public_host']) ?>" placeholder="vpn.madignet.site / IP CHR">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label">L2TP IPsec Secret</label>
+                            <input type="text" class="form-control font-mono" name="ipsec_secret" value="<?= htmlspecialchars($chrConfig['ipsec_secret'] ?? 'ndrsolution.my.id') ?>" placeholder="ndrsolution.my.id">
+                        </div>
                     </div>
                     <div class="row g-2">
                         <div class="col-6">
@@ -743,6 +750,7 @@ function genPass() {
 }
 
 const chrPublicHost = <?= json_encode($publicHost ?: 'IP_CHR_ANDA') ?>;
+const chrIpsecSecret = <?= json_encode($chrConfig['ipsec_secret'] ?? 'ndrsolution.my.id') ?>;
 
 function updateLiveScriptPreview() {
     const box = document.getElementById('live-script-preview');
@@ -773,10 +781,12 @@ function buildClientScript(data) {
     const user = data.user || '';
     const pass = data.pass || '';
     const svc = (data.service === 'any' ? 'l2tp' : data.service) || 'l2tp';
+    const ipsec = (data.ipsec !== undefined ? data.ipsec : chrIpsecSecret) || '';
 
     let cmd = '';
     if (svc === 'l2tp') {
-        cmd = `/interface l2tp-client add name="vpn-madignet" connect-to="${host}" user="${user}" password="${pass}" disabled=no comment="VPN Remote Madignet"`;
+        const ipsecPart = ipsec !== '' ? ` use-ipsec=yes ipsec-secret="${ipsec}"` : '';
+        cmd = `/interface l2tp-client add name="vpn-madignet" connect-to="${host}" user="${user}" password="${pass}"${ipsecPart} disabled=no comment="VPN Remote Madignet"`;
     } else if (svc === 'sstp') {
         cmd = `/interface sstp-client add name="vpn-madignet" connect-to="${host}" user="${user}" password="${pass}" disabled=no comment="VPN Remote Madignet"`;
     } else if (svc === 'pptp') {

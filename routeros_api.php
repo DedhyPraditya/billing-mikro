@@ -283,6 +283,7 @@ function get_chr_config(): array
         'public_host' => $saved['public_host'] ?? ($saved['host'] ?? (defined('CHR_HOST') ? CHR_HOST : '')),
         'default_local_ip' => $saved['default_local_ip'] ?? '10.10.10.1',
         'default_profile' => $saved['default_profile'] ?? 'default-encryption',
+        'ipsec_secret' => $saved['ipsec_secret'] ?? 'ndrsolution.my.id',
     ];
 }
 
