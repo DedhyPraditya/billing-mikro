@@ -161,7 +161,6 @@ $adminUser = $_SESSION['admin_user'] ?? ADMIN_USER;
             <header class="page-header">
                 <div>
                     <h1 class="page-title">Manajemen Data Subdomain</h1>
-                    <p class="page-meta">Tambah, ubah tanggal aktivasi, atau hapus entri dari <span class="font-mono">status.json</span></p>
                 </div>
             </header>
 

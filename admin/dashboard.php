@@ -223,7 +223,7 @@ $adminUser = $_SESSION['admin_user'] ?? ADMIN_USER;
         <header class="page-header">
             <div>
                 <h1 class="page-title">Status Layanan Subdomain</h1>
-                <p class="page-meta"><?= $today->format('d M Y') ?> &middot; Sinkron dengan <span class="font-mono">api.php</span> &amp; cron harian</p>
+                <p class="page-meta"><?= $today->format('d M Y') ?></p>
             </div>
             <div class="d-flex align-items-center gap-2">
                 <button type="button" class="btn btn-ops-primary d-inline-flex align-items-center gap-1" data-bs-toggle="modal" data-bs-target="#addModal">
