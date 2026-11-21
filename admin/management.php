@@ -53,7 +53,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ];
                 save_status_data($statusFile, $data);
                 write_audit_log('domain_add', $domain, ['status' => $status, 'due_date' => $due_date]);
-                $message = 'Data berhasil ditambahkan!';
+                $message = "Domain {$domain} berhasil ditambahkan.";
                 $messageType = 'success';
             }
         } elseif ($action === 'edit') {
@@ -91,7 +91,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ];
                 save_status_data($statusFile, $data);
                 write_audit_log('domain_edit', $domain, ['old_domain' => $old_domain, 'status' => $status, 'due_date' => $due_date]);
-                $message = 'Data berhasil diupdate!';
+                $message = "Data {$domain} berhasil diperbarui.";
                 $messageType = 'success';
             }
         } elseif ($action === 'delete') {
@@ -100,7 +100,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 unset($data[$domain]);
                 save_status_data($statusFile, $data);
                 write_audit_log('domain_delete', $domain);
-                $message = 'Data berhasil dihapus!';
+                $message = "Domain {$domain} berhasil dihapus.";
                 $messageType = 'success';
             }
         }
@@ -110,29 +110,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $data = is_file($statusFile) ? json_decode((string) file_get_contents($statusFile), true) : [];
 $data = is_array($data) ? $data : [];
 
-$stats = [
-    'total' => count($data),
-    'aktif' => 0,
-    'isolir' => 0,
-];
-
-foreach ($data as $item) {
-    if (($item['status'] ?? 'isolir') === 'aktif') {
-        $stats['aktif']++;
-    } else {
-        $stats['isolir']++;
-    }
-}
-
 $adminUser = $_SESSION['admin_user'] ?? ADMIN_USER;
 ?>
-
 <!DOCTYPE html>
 <html lang="id">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Manajemen Data | WarungCloud</title>
+    <title>Manajemen Data | WarungCloud Billing</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <link rel="stylesheet" href="assets/css/app.css">
@@ -141,29 +126,29 @@ $adminUser = $_SESSION['admin_user'] ?? ADMIN_USER;
     <nav class="navbar navbar-expand-lg topbar navbar-dark">
         <div class="container">
             <a class="navbar-brand" href="dashboard.php">
-                <span class="brand-mark"><i class="bi bi-router-fill"></i></span>
-                <span>WarungCloud</span>
+                <span class="brand-mark"><i class="bi bi-hdd-network"></i></span>
+                <span>WarungCloud Billing</span>
             </a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+            <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav ms-auto align-items-lg-center gap-lg-2">
+                <ul class="navbar-nav ms-auto align-items-lg-center gap-1">
                     <li class="nav-item">
-                        <a class="nav-link" href="dashboard.php">Dashboard</a>
+                        <a class="nav-link" href="dashboard.php"><i class="bi bi-grid-1x2 me-1"></i>Overview</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link active" href="management.php">Manajemen Data</a>
+                        <a class="nav-link active" href="management.php"><i class="bi bi-sliders me-1"></i>Manajemen</a>
                     </li>
-                    <li class="nav-item my-2 my-lg-0">
+                    <li class="nav-item ms-lg-2 my-2 my-lg-0">
                         <span class="user-chip">
-                            <i class="bi bi-person-circle"></i>
+                            <i class="bi bi-person-fill"></i>
                             <?= htmlspecialchars($adminUser) ?>
                         </span>
                     </li>
-                    <li class="nav-item">
-                        <a class="btn btn-outline-light btn-sm px-3" href="logout.php">
-                            <i class="bi bi-box-arrow-right me-1"></i>Logout
+                    <li class="nav-item ms-lg-1">
+                        <a class="btn btn-sm btn-outline-secondary text-light border-secondary px-2 py-1" style="font-size:0.78rem;" href="logout.php">
+                            <i class="bi bi-box-arrow-right me-1"></i>Keluar
                         </a>
                     </li>
                 </ul>
@@ -173,59 +158,40 @@ $adminUser = $_SESSION['admin_user'] ?? ADMIN_USER;
 
     <main class="app-shell">
         <div class="container">
-            <section class="app-card page-intro mb-4">
-                <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-start gap-3">
-                    <div>
-                        <span class="eyebrow">
-                            <i class="bi bi-database-gear"></i>
-                            Manajemen Data
-                        </span>
-                        <h1 class="page-intro-title">Kelola data pelanggan dengan lebih ringkas</h1>
-                        <p class="page-intro-copy">
-                            Tambahkan domain baru, edit data lama, atau hapus entri yang sudah tidak dipakai tanpa memenuhi layar dengan informasi yang tidak perlu.
-                        </p>
-                    </div>
-                    <div class="d-flex flex-wrap gap-2">
-                        <span class="soft-badge"><i class="bi bi-hdd-stack"></i> <?= $stats['total'] ?> data</span>
-                        <span class="soft-badge"><i class="bi bi-check2-circle"></i> <?= $stats['aktif'] ?> aktif</span>
-                        <span class="soft-badge"><i class="bi bi-slash-circle"></i> <?= $stats['isolir'] ?> isolir</span>
-                    </div>
+            <header class="page-header">
+                <div>
+                    <h1 class="page-title">Manajemen Data Subdomain</h1>
+                    <p class="page-meta">Tambah, ubah tanggal aktivasi, atau hapus entri dari <span class="font-mono">status.json</span></p>
                 </div>
-            </section>
+            </header>
 
             <?php if ($message): ?>
-                <div class="alert alert-<?= $messageType ?> alert-dismissible border-0 rounded-4 shadow-sm fade show mb-4" role="alert">
-                    <i class="bi <?= $messageType === 'success' ? 'bi-check-circle-fill' : 'bi-exclamation-triangle-fill' ?> me-2"></i>
-                    <?= htmlspecialchars($message) ?>
-                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                <div class="alert alert-<?= $messageType ?> alert-dismissible fade show py-2 px-3 mb-3 d-flex align-items-center justify-content-between" role="alert" style="font-size:0.84rem;border-radius:8px;">
+                    <div>
+                        <i class="bi <?= $messageType === 'success' ? 'bi-check-circle-fill' : 'bi-exclamation-triangle-fill' ?> me-2"></i>
+                        <?= htmlspecialchars($message) ?>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" style="padding:0.65rem;"></button>
                 </div>
             <?php endif; ?>
 
-            <div class="row g-4">
-                <div class="col-xl-4">
-                    <div class="app-card p-4 h-100">
-                        <div class="card-title-row">
-                            <div>
-                                <h2 class="section-title">Form data pelanggan</h2>
-                                <p class="section-subtitle">Tambahkan domain baru dengan tanggal aktivasi, lalu jatuh tempo dihitung otomatis 1 bulan ke depan.</p>
-                            </div>
-                            <span class="soft-badge"><i class="bi bi-plus-circle"></i> Entry Baru</span>
-                        </div>
+            <div class="row g-3">
+                <div class="col-lg-4">
+                    <div class="panel-card p-3">
+                        <h2 class="h6 fw-bold mb-3 pb-2 border-bottom">Tambah Subdomain Baru</h2>
 
                         <form method="POST">
                             <?= csrf_field() ?>
-                            <input type="hidden" name="action" value="add" id="action-field">
-                            <input type="hidden" name="old_domain" id="old-domain">
+                            <input type="hidden" name="action" value="add">
 
                             <div class="mb-3">
-                                <label class="form-label">Domain</label>
-                                <input type="text" class="form-control" name="domain" id="domain" placeholder="contoh.madignet.cloud" required>
+                                <label class="form-label">Subdomain</label>
+                                <input type="text" class="form-control font-mono" name="domain" id="domain" placeholder="pelanggan.madignet.site" required>
                             </div>
 
                             <div class="mb-3">
                                 <label class="form-label">Status</label>
                                 <select class="form-select" name="status" id="status" required>
-                                    <option value="">-- Pilih Status --</option>
                                     <option value="aktif">Aktif</option>
                                     <option value="isolir">Isolir</option>
                                 </select>
@@ -233,116 +199,97 @@ $adminUser = $_SESSION['admin_user'] ?? ADMIN_USER;
 
                             <div class="mb-3">
                                 <label class="form-label">Tanggal Aktivasi</label>
-                                <input type="date" class="form-control" name="activated_at" id="activated_at" required>
+                                <input type="date" class="form-control font-mono" name="activated_at" id="activated_at" required>
                             </div>
 
                             <div class="mb-3">
-                                <label class="form-label">Jatuh Tempo Otomatis</label>
-                                <input type="date" class="form-control" name="due_date" id="due_date" readonly>
+                                <label class="form-label text-muted">Jatuh Tempo (+1 Bulan)</label>
+                                <input type="date" class="form-control font-mono bg-light" name="due_date" id="due_date" readonly>
                             </div>
 
-                            <div class="d-grid gap-2 pt-2">
-                                <button type="submit" class="btn btn-primary btn-lg" id="submit-btn">
-                                    <i class="bi bi-plus-lg me-2"></i>Tambah Data
+                            <div class="d-flex gap-2 pt-1">
+                                <button type="submit" class="btn btn-ops-primary flex-grow-1">
+                                    <i class="bi bi-plus-lg me-1"></i>Simpan
                                 </button>
-                                <button type="reset" class="btn btn-light border" id="reset-btn">
-                                    <i class="bi bi-arrow-counterclockwise me-2"></i>Reset Form
-                                </button>
+                                <button type="reset" class="btn btn-ops-light">Reset</button>
                             </div>
                         </form>
-
-                        <div class="surface-muted rounded-4 p-3 mt-4">
-                            <div class="d-flex align-items-start gap-3">
-                                <span class="metric-icon icon-primary flex-shrink-0" style="width:42px;height:42px;font-size:1rem;">
-                                    <i class="bi bi-lightbulb"></i>
-                                </span>
-                                <div>
-                                    <h3 class="h6 mb-1">Tips pengisian</h3>
-                                    <p class="text-soft mb-0">Tanggal jatuh tempo sekarang otomatis mengikuti 1 bulan kalender dari tanggal aktivasi yang dipilih.</p>
-                                </div>
-                            </div>
-                        </div>
                     </div>
                 </div>
 
-                <div class="col-xl-8">
-                    <div class="app-card p-4">
-                        <div class="card-title-row flex-wrap">
-                            <div>
-                                <h2 class="section-title">Daftar domain</h2>
-                                <p class="section-subtitle">Edit data lewat modal atau hapus entri yang sudah tidak digunakan.</p>
-                            </div>
-                            <div class="search-box" style="min-width: min(100%, 320px);">
+                <div class="col-lg-8">
+                    <div class="panel-card">
+                        <div class="panel-toolbar">
+                            <span class="fw-semibold" style="font-size:0.85rem;">Daftar Terdaftar (<?= count($data) ?>)</span>
+                            <div class="search-input-wrap">
                                 <i class="bi bi-search"></i>
-                                <input type="search" id="managementSearch" class="form-control" placeholder="Cari domain, status, atau tanggal...">
+                                <input type="search" id="managementSearch" class="form-control" placeholder="Cari domain atau tanggal...">
                             </div>
                         </div>
 
-                        <div class="table-wrap">
-                            <div class="table-responsive">
-                                <table class="table table-modern mb-0" id="managementTable">
-                                    <thead>
-                                        <tr>
-                                            <th>Domain</th>
-                                            <th>Status</th>
-                                            <th>Aktivasi</th>
-                                            <th>Jatuh Tempo</th>
-                                            <th>Aksi</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <?php foreach ($data as $domain => $info): ?>
-                                        <tr data-search="<?= htmlspecialchars(strtolower($domain . ' ' . ($info['status'] ?? '') . ' ' . ($info['activated_at'] ?? '') . ' ' . ($info['due_date'] ?? ''))) ?>">
-                                            <td>
-                                                <span class="domain-title"><?= htmlspecialchars($domain) ?></span>
-                                                <span class="domain-meta">Data pelanggan billing</span>
-                                            </td>
-                                            <td>
-                                                <?php if (($info['status'] ?? 'isolir') === 'aktif'): ?>
-                                                    <span class="status-pill status-aktif"><i class="bi bi-check-circle-fill"></i> Aktif</span>
-                                                <?php else: ?>
-                                                    <span class="status-pill status-isolir"><i class="bi bi-slash-circle-fill"></i> Isolir</span>
-                                                <?php endif; ?>
-                                            </td>
-                                            <td><?= htmlspecialchars($info['activated_at'] ?? '-') ?></td>
-                                            <td><?= htmlspecialchars($info['due_date'] ?? '-') ?></td>
-                                            <td>
-                                                <div class="d-flex flex-wrap gap-2">
-                                                    <button type="button" class="btn btn-sm btn-soft-warning" data-bs-toggle="modal"
-                                                            data-bs-target="#editModal"
-                                                            data-domain="<?= htmlspecialchars($domain, ENT_QUOTES, 'UTF-8') ?>"
-                                                            data-status="<?= htmlspecialchars($info['status'] ?? 'isolir', ENT_QUOTES, 'UTF-8') ?>"
-                                                            data-activated="<?= htmlspecialchars($info['activated_at'] ?? '', ENT_QUOTES, 'UTF-8') ?>"
-                                                            data-due="<?= htmlspecialchars($info['due_date'] ?? '', ENT_QUOTES, 'UTF-8') ?>"
-                                                            onclick="loadEditFormFromBtn(this)">
-                                                        <i class="bi bi-pencil me-1"></i>Edit
+                        <div class="table-responsive">
+                            <table class="table-ops" id="managementTable">
+                                <thead>
+                                    <tr>
+                                        <th>Subdomain</th>
+                                        <th>Status</th>
+                                        <th>Aktivasi</th>
+                                        <th>Jatuh Tempo</th>
+                                        <th class="text-end">Aksi</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php foreach ($data as $domain => $info): ?>
+                                    <tr data-search="<?= htmlspecialchars(strtolower($domain . ' ' . ($info['status'] ?? '') . ' ' . ($info['activated_at'] ?? '') . ' ' . ($info['due_date'] ?? ''))) ?>">
+                                        <td>
+                                            <div class="domain-cell">
+                                                <span class="domain-name"><?= htmlspecialchars($domain) ?></span>
+                                                <a href="https://<?= htmlspecialchars($domain) ?>" target="_blank" rel="noopener" class="domain-ext-link">
+                                                    <i class="bi bi-box-arrow-up-right"></i>
+                                                </a>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <?php if (($info['status'] ?? 'isolir') === 'aktif'): ?>
+                                                <span class="badge-ops badge-aktif"><span class="status-dot"></span>Aktif</span>
+                                            <?php else: ?>
+                                                <span class="badge-ops badge-isolir"><span class="status-dot"></span>Isolir</span>
+                                            <?php endif; ?>
+                                        </td>
+                                        <td class="font-mono text-muted" style="font-size:0.8rem;"><?= htmlspecialchars($info['activated_at'] ?? '-') ?></td>
+                                        <td class="font-mono" style="font-size:0.8rem;font-weight:500;"><?= htmlspecialchars($info['due_date'] ?? '-') ?></td>
+                                        <td class="text-end">
+                                            <div class="d-inline-flex gap-1">
+                                                <button type="button" class="btn btn-xs btn-ops-light" data-bs-toggle="modal"
+                                                        data-bs-target="#editModal"
+                                                        data-domain="<?= htmlspecialchars($domain, ENT_QUOTES, 'UTF-8') ?>"
+                                                        data-status="<?= htmlspecialchars($info['status'] ?? 'isolir', ENT_QUOTES, 'UTF-8') ?>"
+                                                        data-activated="<?= htmlspecialchars($info['activated_at'] ?? '', ENT_QUOTES, 'UTF-8') ?>"
+                                                        data-due="<?= htmlspecialchars($info['due_date'] ?? '', ENT_QUOTES, 'UTF-8') ?>"
+                                                        onclick="loadEditFormFromBtn(this)">
+                                                    <i class="bi bi-pencil"></i> Edit
+                                                </button>
+                                                <form method="POST" class="m-0" onsubmit="return confirm('Hapus <?= htmlspecialchars(addslashes($domain)) ?>?');">
+                                                    <?= csrf_field() ?>
+                                                    <input type="hidden" name="action" value="delete">
+                                                    <input type="hidden" name="domain" value="<?= htmlspecialchars($domain) ?>">
+                                                    <button type="submit" class="btn btn-xs btn-ops-danger">
+                                                        <i class="bi bi-trash"></i>
                                                     </button>
-                                                    <form method="POST" class="m-0" onsubmit="return confirm('Yakin ingin menghapus data ini?');">
-                                                        <?= csrf_field() ?>
-                                                        <input type="hidden" name="action" value="delete">
-                                                        <input type="hidden" name="domain" value="<?= htmlspecialchars($domain) ?>">
-                                                        <button type="submit" class="btn btn-sm btn-soft-danger">
-                                                            <i class="bi bi-trash me-1"></i>Hapus
-                                                        </button>
-                                                    </form>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                        <?php endforeach; ?>
-                                        <?php if (empty($data)): ?>
-                                        <tr>
-                                            <td colspan="5">
-                                                <div class="empty-state">
-                                                    <i class="bi bi-folder2-open"></i>
-                                                    <h3 class="h5 mb-2">Belum ada data pelanggan</h3>
-                                                    <p class="mb-0">Silakan tambahkan data baru dari form di sebelah kiri.</p>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                        <?php endif; ?>
-                                    </tbody>
-                                </table>
-                            </div>
+                                                </form>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    <?php endforeach; ?>
+                                    <?php if (empty($data)): ?>
+                                    <tr>
+                                        <td colspan="5" class="text-center py-5 text-muted">
+                                            Belum ada data pelanggan.
+                                        </td>
+                                    </tr>
+                                    <?php endif; ?>
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                 </div>
@@ -351,10 +298,10 @@ $adminUser = $_SESSION['admin_user'] ?? ADMIN_USER;
     </main>
 
     <div class="modal fade" id="editModal" tabindex="-1">
-        <div class="modal-dialog">
+        <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title"><i class="bi bi-pencil-square me-2"></i>Edit Data</h5>
+                    <h5 class="modal-title">Edit Data Subdomain</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <form method="POST">
@@ -364,31 +311,32 @@ $adminUser = $_SESSION['admin_user'] ?? ADMIN_USER;
                         <input type="hidden" name="old_domain" id="edit-old-domain">
 
                         <div class="mb-3">
-                            <label class="form-label">Domain</label>
-                            <input type="text" class="form-control" name="domain" id="edit-domain" required>
+                            <label class="form-label">Subdomain</label>
+                            <input type="text" class="form-control font-mono" name="domain" id="edit-domain" required>
                         </div>
 
-                        <div class="mb-3">
-                            <label class="form-label">Status</label>
-                            <select class="form-select" name="status" id="edit-status" required>
-                                <option value="aktif">Aktif</option>
-                                <option value="isolir">Isolir</option>
-                            </select>
+                        <div class="row g-3">
+                            <div class="col-sm-6">
+                                <label class="form-label">Status</label>
+                                <select class="form-select" name="status" id="edit-status" required>
+                                    <option value="aktif">Aktif</option>
+                                    <option value="isolir">Isolir</option>
+                                </select>
+                            </div>
+                            <div class="col-sm-6">
+                                <label class="form-label">Tanggal Aktivasi</label>
+                                <input type="date" class="form-control font-mono" name="activated_at" id="edit-activated_at" required>
+                            </div>
                         </div>
 
-                        <div class="mb-3">
-                            <label class="form-label">Tanggal Aktivasi</label>
-                            <input type="date" class="form-control" name="activated_at" id="edit-activated_at" required>
-                        </div>
-
-                        <div class="mb-3">
-                            <label class="form-label">Jatuh Tempo Otomatis</label>
-                            <input type="date" class="form-control" name="due_date" id="edit-due_date" readonly>
+                        <div class="mt-3">
+                            <label class="form-label text-muted">Jatuh Tempo Otomatis</label>
+                            <input type="date" class="form-control font-mono bg-light" name="due_date" id="edit-due_date" readonly>
                         </div>
                     </div>
                     <div class="modal-footer">
-                        <button type="button" class="btn btn-light border" data-bs-dismiss="modal">Batal</button>
-                        <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg me-1"></i>Simpan Perubahan</button>
+                        <button type="button" class="btn btn-ops-light" data-bs-dismiss="modal">Batal</button>
+                        <button type="submit" class="btn btn-ops-primary">Simpan Perubahan</button>
                     </div>
                 </form>
             </div>
@@ -398,39 +346,23 @@ $adminUser = $_SESSION['admin_user'] ?? ADMIN_USER;
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         function calculateDueDate(activationDate) {
-            if (!activationDate) {
-                return '';
-            }
-
+            if (!activationDate) return '';
             const [year, month, day] = activationDate.split('-').map(Number);
-            if (!year || !month || !day) {
-                return '';
-            }
-
+            if (!year || !month || !day) return '';
             const targetYear = month === 12 ? year + 1 : year;
             const targetMonth = month === 12 ? 1 : month + 1;
             const lastDay = new Date(targetYear, targetMonth, 0).getDate();
             const safeDay = Math.min(day, lastDay);
-
-            return [
-                targetYear,
-                String(targetMonth).padStart(2, '0'),
-                String(safeDay).padStart(2, '0')
-            ].join('-');
+            return [targetYear, String(targetMonth).padStart(2, '0'), String(safeDay).padStart(2, '0')].join('-');
         }
 
         function syncDueDate(sourceId, targetId) {
             const activationInput = document.getElementById(sourceId);
             const dueInput = document.getElementById(targetId);
-
-            if (!activationInput || !dueInput) {
-                return;
-            }
-
+            if (!activationInput || !dueInput) return;
             const applyValue = function() {
                 dueInput.value = calculateDueDate(activationInput.value);
             };
-
             activationInput.addEventListener('input', applyValue);
             activationInput.addEventListener('change', applyValue);
             applyValue();
